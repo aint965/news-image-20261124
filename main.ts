@@ -19,6 +19,7 @@ const GREY: RGB = [90, 90, 90];
 const SKY: RGB = [156, 195, 229];
 const SEA: RGB = [96, 139, 178];
 const GREEN: RGB = [74, 140, 82];
+const DARKGREEN: RGB = [46, 100, 56];
 const GOLD: RGB = [212, 160, 32];
 const ORANGE: RGB = [232, 116, 24];
 const WHITE: RGB = [255, 255, 255];
@@ -91,6 +92,32 @@ function drawLine(x0: number, y0: number, x1: number, y1: number, c: RGB, thick 
   for (let s = 0; s <= steps; s++) {
     fillCircle(x0 + (dx * s) / steps, y0 + (dy * s) / steps, rad, c);
   }
+}
+function ellipseArc(cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, c: RGB, thick = 1): void {
+  const rad = Math.max(1, Math.floor(thick / 2));
+  for (let a = a0; a <= a1; a += 1) {
+    const t = (a * Math.PI) / 180;
+    fillCircle(cx + rx * Math.cos(t), cy + ry * Math.sin(t), rad, c);
+  }
+}
+function ellipse(cx: number, cy: number, rx: number, ry: number, c: RGB, thick = 1): void {
+  ellipseArc(cx, cy, rx, ry, 0, 360, c, thick);
+}
+function fillEllipse(cx: number, cy: number, rx: number, ry: number, c: RGB): void {
+  const rxi = Math.round(rx);
+  const ryi = Math.round(ry);
+  for (let dy = -ryi; dy <= ryi; dy++) {
+    const dx = Math.floor(rxi * Math.sqrt(Math.max(0, 1 - (dy * dy) / (ryi * ryi))));
+    fillRect(cx - dx, cy + dy, dx * 2 + 1, 1, c);
+  }
+}
+function fillPentagon(cx: number, cy: number, r: number, rot: number, c: RGB): void {
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i < 5; i++) {
+    const a = rot + (i * 2 * Math.PI) / 5;
+    pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  }
+  fillPolygon(pts, c);
 }
 function fillPolygon(points: Array<[number, number]>, c: RGB): void {
   let minY = Infinity;
@@ -286,24 +313,25 @@ function picGlobe(x: number, y: number, w: number, h: number): void {
   fillRect(x, y, w, h, PIC_BG);
   const cx = x + w / 2;
   const cy = y + h / 2;
-  const r = Math.min(w, h) / 2 - 5;
+  const r = Math.min(w, h) / 2 - 4;
+  // orbit ring behind the disc, using the wide box so the globe reads big
+  ellipse(cx, cy, r + 24, (r + 24) * 0.28, NAVY, 2);
   fillCircle(cx, cy, r, NAVY);
   fillCircle(cx, cy, r - 3, SKY);
-  // meridians and parallels
-  for (const f of [-0.55, 0, 0.55]) {
-    const dx = r * f;
-    const dy = Math.sqrt(Math.max(0, r * r - dx * dx));
-    drawLine(cx + dx, cy - dy + 3, cx + dx, cy + dy - 3, NAVY, 2);
+  // curved meridians: full ellipses, narrow to wide, plus the centre line
+  for (const f of [0.35, 0.7]) {
+    ellipse(cx, cy, r * f, r - 3, NAVY, 2);
   }
-  for (const f of [-0.5, 0.5]) {
-    const dy = r * f;
-    const dx = Math.sqrt(Math.max(0, r * r - dy * dy));
-    drawLine(cx - dx + 3, cy + dy, cx + dx - 3, cy + dy, NAVY, 2);
-  }
-  // land blobs (kept well inside the disc)
-  fillCircle(cx - r * 0.35, cy - r * 0.3, r * 0.22, GREEN);
-  fillCircle(cx + r * 0.3, cy + r * 0.25, r * 0.26, GREEN);
-  fillCircle(cx + r * 0.45, cy - r * 0.35, r * 0.14, GREEN);
+  drawLine(cx, cy - r + 3, cx, cy + r - 3, NAVY, 2);
+  // curved parallels: arcs bulging toward the equator
+  ellipseArc(cx, cy - r * 0.5, r * 0.86, r * 0.16, 0, 180, NAVY, 2);
+  ellipseArc(cx, cy + r * 0.5, r * 0.86, r * 0.16, 180, 360, NAVY, 2);
+  // continents as irregular polygons (never circles, so nothing reads as a molecule)
+  const P = (fx: number, fy: number): [number, number] => [cx + r * fx, cy + r * fy];
+  fillPolygon([P(-0.62, -0.42), P(-0.2, -0.58), P(-0.02, -0.28), P(-0.38, -0.08), P(-0.66, -0.18)], GREEN);
+  fillPolygon([P(0.12, -0.52), P(0.52, -0.44), P(0.58, -0.12), P(0.3, -0.02), P(0.08, -0.28)], GREEN);
+  fillPolygon([P(-0.42, 0.18), P(-0.14, 0.22), P(-0.2, 0.58), P(-0.48, 0.52)], GREEN);
+  fillPolygon([P(0.34, 0.34), P(0.62, 0.34), P(0.56, 0.56), P(0.34, 0.56)], GREEN);
   // outline ring
   for (let k = 0; k < 3; k++) {
     const rr = r - k;
@@ -385,24 +413,26 @@ function picBallot(x: number, y: number, w: number, h: number): void {
 function picFootball(x: number, y: number, w: number, h: number): void {
   fillRect(x, y, w, h, PIC_BG);
   const cx = x + w / 2;
-  const cy = y + h / 2;
+  const cy = y + h / 2 - 4;
   const r = Math.min(w, h) / 2 - 5;
+  // grass strip at the bottom, with the ball's shadow on it
+  fillRect(x, y + h - 14, w, 14, GREEN);
+  fillEllipse(cx, cy + r + 1, r * 0.8, 5, DARKGREEN);
   fillCircle(cx, cy, r, INK);
   fillCircle(cx, cy, r - 3, WHITE);
   // centre pentagon
-  const pent: Array<[number, number]> = [];
+  fillPentagon(cx, cy, r * 0.28, -Math.PI / 2, INK);
+  // five outer pentagons (never circles), each joined to the centre by a short seam
   for (let i = 0; i < 5; i++) {
     const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-    pent.push([cx + r * 0.32 * Math.cos(a), cy + r * 0.32 * Math.sin(a)]);
-  }
-  fillPolygon(pent, INK);
-  // patches + seams
-  for (let i = 0; i < 5; i++) {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-    const px2 = cx + r * 0.72 * Math.cos(a);
-    const py2 = cy + r * 0.72 * Math.sin(a);
-    fillCircle(px2, py2, r * 0.13, INK);
-    drawLine(cx + r * 0.32 * Math.cos(a), cy + r * 0.32 * Math.sin(a), px2, py2, INK, 2);
+    const ox = cx + r * 0.66 * Math.cos(a);
+    const oy = cy + r * 0.66 * Math.sin(a);
+    fillPentagon(ox, oy, r * 0.22, a + Math.PI, INK);
+    const vx = cx + r * 0.28 * Math.cos(a);
+    const vy = cy + r * 0.28 * Math.sin(a);
+    const ix = ox + r * 0.22 * Math.cos(a + Math.PI);
+    const iy = oy + r * 0.22 * Math.sin(a + Math.PI);
+    drawLine(vx, vy, ix, iy, INK, 3);
   }
   strokeRect(x, y, w, h, INK, 2);
 }
@@ -422,7 +452,7 @@ function drawStoryCell(cx: number, cy: number, cw: number, ch: number, s: Story,
   hline(cx + 14, cy + 32, cw - 28, INK, 1);
   s.pic(cx + 14, cy + 40, cw - 28, picH);
   const hy = drawWrapped(cx + 14, cy + 48 + picH, s.headline, 3, INK, cw - 28, 24);
-  drawWrapped(cx + 14, hy + 6, s.deck, 2, GREY, cw - 28, 17);
+  drawWrapped(cx + 14, hy + 6, s.deck, 3, GREY, cw - 28, 22);
 }
 
 function draw(): void {
@@ -440,66 +470,67 @@ function draw(): void {
 
   // ---- lead story ----
   const leadY = 196;
-  const leadH = 256;
+  const leadH = 236;
   fillRect(24, leadY, W - 48, leadH, PANEL);
   strokeRect(24, leadY, W - 48, leadH, INK, 2);
   drawText(48, leadY + 14, "LEAD STORY - UKRAINE", 2, RED);
   drawWrapped(48, leadY + 36, "UKRAINE SAYS IT SANK RUSSIAN WARSHIP OFF LIBYA", 5, INK, 928, 40);
   drawWrapped(
     48,
-    leadY + 128,
-    "KYIV CLAIMED ITS FORCES SANK A RUSSIAN NAVY MISSILE CORVETTE, BELIEVED TO BE THE MERKURY, AFTER AN EXPLOSION AND FIRE AT THE PORT OF BENGHAZI.",
-    2,
+    leadY + 122,
+    "KYIV SAYS ITS FORCES SANK THE RUSSIAN CORVETTE MERKURY AFTER A BLAST AT BENGHAZI PORT.",
+    3,
     INK,
     560,
-    18,
+    24,
   );
-  picWarship(640, leadY + 122, 336, 88);
-  hline(48, leadY + 222, 928, INK, 1);
-  drawTextCentered(W / 2, leadY + 232, "BENGHAZI, LIBYA - 24 NOVEMBER 2026", 2, GREY);
+  picWarship(640, leadY + 116, 336, 88);
+  hline(48, leadY + 210, 928, INK, 1);
+  drawTextCentered(W / 2, leadY + 220, "BENGHAZI, LIBYA - 24 NOVEMBER 2026", 2, GREY);
 
   // ---- grid: 3 across, then 2 across ----
-  const row1Y = 470;
-  const rowH = 246;
-  const row2Y = 734;
+  const row1Y = 444;
+  const rowH = 276;
+  const row2Y = 732;
+  const row2H = 252;
   const stories: Story[] = [
     {
       kicker: "CLIMATE",
       headline: "COP31 ENDS WITH NO DEAL",
-      deck: "NO FINAL AGREEMENT. TALKS MAY BE SUSPENDED UNTIL NEXT YEAR.",
+      deck: "NO DEAL. TALKS MAY RESUME NEXT YEAR.",
       pic: picGlobe,
     },
     {
       kicker: "MIDDLE EAST",
       headline: "IRAN VOWS TO COUNTER US HORMUZ BLOCKADE",
-      deck: "AFTER PRESIDENT TRUMP THREATENED TO SINK IRANIAN SHIPS.",
+      deck: "TRUMP VOWED TO SINK IRAN SHIPS.",
       pic: picTanker,
     },
     {
       kicker: "TECHNOLOGY",
       headline: "NVIDIA REINSTATES HUANG AS CHIEF",
-      deck: "UNANIMOUS, AFTER PRESIDENT TRUMP INTERVENED.",
+      deck: "UNANIMOUS, TRUMP STEPPED IN.",
       pic: picChip,
     },
     {
       kicker: "POLITICS",
       headline: "DEMOCRATS TAKE HISTORIC 258-SEAT HOUSE MAJORITY",
-      deck: "THE LARGEST DEMOCRATIC HOUSE MAJORITY SINCE 1992.",
+      deck: "A RECORD DEMOCRATIC HOUSE MAJORITY.",
       pic: picBallot,
     },
     {
       kicker: "SPORT",
       headline: "UK TO HOST 2035 WOMEN'S WORLD CUP",
-      deck: "THE UNITED KINGDOM WAS CONFIRMED AS HOST OF THE 2035 WOMEN'S WORLD CUP.",
+      deck: "UK TO HOST THE 2035 WOMEN'S WORLD CUP.",
       pic: picFootball,
     },
   ];
   const xs3 = [24, 353, 682];
   for (let i = 0; i < 3; i++) {
-    drawStoryCell(xs3[i], row1Y, 317, rowH, stories[i], 64);
+    drawStoryCell(xs3[i], row1Y, 317, rowH, stories[i], 80);
   }
-  drawStoryCell(24, row2Y, 482, rowH, stories[3], 96);
-  drawStoryCell(518, row2Y, 482, rowH, stories[4], 96);
+  drawStoryCell(24, row2Y, 482, row2H, stories[3], 96);
+  drawStoryCell(518, row2Y, 482, row2H, stories[4], 96);
 
   // ---- footer ----
   drawTextCentered(W / 2, 994, "THE WORLD TODAY - TUESDAY, 24 NOVEMBER 2026 - SIX STORIES", 2, GREY);
